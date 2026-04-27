@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build outputs
+frontend/dist/
+realtime/dist/
+*.egg-info/
+
+# Environment & secrets
+.env
+infra/.env
+frontend/.env
+infra/nginx/ssl/*.pem
+infra/nginx/ssl/*.key
+infra/nginx/ssl/*.crt
+
+# Database & data
+*.db
+*.sqlite
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Docker volumes (local)
+emqx_data/
+timescale_data/
+redis_data/
+
+# macOS
+.DS_Store

@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Theme CSS variables ─────────────────────────────────────────────────── */
+
+:root {
+  /* Light mode (default) */
+  --c-bg:        248 250 252;   /* slate-50  */
+  --c-surface:   255 255 255;   /* white     */
+  --c-surface-2: 241 245 249;   /* slate-100 */
+  --c-border:    226 232 240;   /* slate-200 */
+  --c-text:       15  23  42;   /* slate-900 */
+  --c-text-2:    100 116 139;   /* slate-500 */
+  --c-text-3:    148 163 184;   /* slate-400 */
+}
+
+.dark {
+  /* Dark mode */
+  --c-bg:          2   6  23;   /* slate-950 */
+  --c-surface:    15  23  42;   /* slate-900 */
+  --c-surface-2:  30  41  59;   /* slate-800 */
+  --c-border:     30  41  59;   /* slate-800 */
+  --c-text:      248 250 252;   /* slate-50  */
+  --c-text-2:    148 163 184;   /* slate-400 */
+  --c-text-3:     71  85 105;   /* slate-600 */
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  body {
+    @apply bg-c-bg text-c-text;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-c-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-c-text-3; }
+}
+
+/* ── Components ──────────────────────────────────────────────────────────── */
+
+@layer components {
+  .input-field {
+    @apply bg-c-surface-2 border border-c-border rounded-lg px-3 py-2 text-sm text-c-text
+           placeholder:text-c-text-3 focus:outline-none focus:ring-2 focus:ring-emerald-500
+           transition-colors;
+  }
+
+  .btn-primary {
+    @apply bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm
+           font-medium px-4 py-2 rounded-lg transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-c-surface-2 hover:bg-c-border text-c-text-2 hover:text-c-text text-sm
+           font-medium px-4 py-2 rounded-lg border border-c-border transition-colors;
+  }
+
+  .btn-danger {
+    @apply bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-sm
+           font-medium px-4 py-2 rounded-lg transition-colors;
+  }
+
+  /* Reusable card surface */
+  .card {
+    @apply bg-c-surface border border-c-border rounded-xl;
+  }
+}

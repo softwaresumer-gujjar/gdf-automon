@@ -1,0 +1,154 @@
+version: "3.9"
+
+services:
+  # ─── MQTT Broker ───────────────────────────────────────────────────────────
+  emqx:
+    image: emqx/emqx:5.8.0
+    container_name: gdf-emqx
+    restart: unless-stopped
+    ports:
+      - "1883:1883"     # MQTT
+      - "8883:8883"     # MQTT over TLS
+      - "8083:8083"     # MQTT over WebSocket
+      - "8084:8084"     # MQTT over WSS
+      - "18083:18083"   # Dashboard UI
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+      - ./emqx/emqx.conf:/opt/emqx/etc/emqx.conf:ro
+    environment:
+      EMQX_NODE__COOKIE: gdf_secret_cookie
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD:-gdf_admin_2024}
+    healthcheck:
+      test: ["CMD", "emqx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - gdf-net
+
+  # ─── TimescaleDB ───────────────────────────────────────────────────────────
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: gdf-timescaledb
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gdf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gdf_secure_2024}
+      POSTGRES_DB: ${POSTGRES_DB:-gdfautomon}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gdf} -d ${POSTGRES_DB:-gdfautomon}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - gdf-net
+
+  # ─── Redis (live dashboard pub/sub) ───────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: gdf-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-gdf_redis_2024} --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-gdf_redis_2024}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gdf-net
+
+  # ─── FastAPI Backend ───────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: gdf-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend:/app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-gdf}:${POSTGRES_PASSWORD:-gdf_secure_2024}@timescaledb:5432/${POSTGRES_DB:-gdfautomon}
+      MQTT_HOST: emqx
+      MQTT_PORT: 1883
+      MQTT_USERNAME: ${MQTT_BACKEND_USER:-gdf_backend}
+      MQTT_PASSWORD: ${MQTT_BACKEND_PASSWORD:-backend_secret}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-gdf_redis_2024}@redis:6379/0
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_EMAIL: ${VAPID_EMAIL:-admin@gdfautomon.local}
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_change_in_prod}
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","https://localhost"]'
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
+    networks:
+      - gdf-net
+
+  # ─── Node.js Socket.io Realtime Gateway ───────────────────────────────────
+  realtime:
+    build:
+      context: ../realtime
+      dockerfile: Dockerfile
+    container_name: gdf-realtime
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      MQTT_HOST: emqx
+      MQTT_PORT: 1883
+      MQTT_USERNAME: ${MQTT_REALTIME_USER:-gdf_realtime}
+      MQTT_PASSWORD: ${MQTT_REALTIME_PASSWORD:-realtime_secret}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-gdf_redis_2024}@redis:6379/0
+      PORT: 3001
+      CORS_ORIGINS: '["http://localhost:5173","https://localhost"]'
+    depends_on:
+      emqx:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gdf-net
+
+  # ─── Nginx Reverse Proxy ───────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: gdf-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ../frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+      - realtime
+    networks:
+      - gdf-net
+
+networks:
+  gdf-net:
+    driver: bridge
+
+volumes:
+  emqx_data:
+  emqx_log:
+  timescale_data:
+  redis_data:

@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$comment": "Meta-schema for all GDF-AutoMon sensor configurations. Each sensor type defines its own config_schema following this pattern.",
+  "title": "Sensor Configuration",
+  "description": "Base structure for sensor configuration objects stored in the sensors.config JSONB column.",
+  "type": "object",
+  "properties": {
+    "sensor_type": {
+      "type": "string",
+      "description": "Unique sensor type identifier matching a registered SensorAdapter"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": ["mqtt", "modbus", "serial", "http", "rtsp"],
+      "description": "Communication protocol used by this sensor"
+    }
+  },
+  "examples": [
+    {
+      "sensor_type": "temperature_humidity",
+      "protocol": "mqtt",
+      "mqtt_topic_prefix": "barn/sensor01",
+      "poll_interval_seconds": 30,
+      "temperature_unit": "°C"
+    },
+    {
+      "sensor_type": "weight_hx711",
+      "protocol": "mqtt",
+      "mqtt_topic_prefix": "barn/scale01",
+      "capacity_kg": 50,
+      "unit": "kg"
+    },
+    {
+      "sensor_type": "milk_analyzer_lactoscan",
+      "protocol": "mqtt",
+      "mqtt_topic_prefix": "barn/lactoscan-01",
+      "scc_alert_threshold": 200000
+    },
+    {
+      "sensor_type": "ip_camera_rtsp",
+      "protocol": "rtsp",
+      "rtsp_url": "rtsp://admin:password@192.168.1.10:554/stream",
+      "hls_host": "192.168.1.100",
+      "hls_port": 8090,
+      "mqtt_topic_prefix": "barn/camera-01"
+    }
+  ]
+}

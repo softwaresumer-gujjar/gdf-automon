@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose*)",
+      "Bash(docker exec*)",
+      "Bash(docker logs*)",
+      "Bash(docker build*)",
+      "Bash(npm install*)",
+      "Bash(npm run*)",
+      "Bash(npx*)",
+      "Bash(pip install*)",
+      "Bash(uvicorn*)",
+      "Bash(alembic*)",
+      "Bash(pytest*)",
+      "Bash(psql*)",
+      "Bash(bash infra/scripts/*)",
+      "Bash(mkdir -p*)",
+      "Bash(cp *)",
+      "Bash(cat *)"
+    ],
+    "deny": []
+  },
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://gdf:gdf_secure_2024@localhost:5432/gdfautomon"],
+      "description": "TimescaleDB schema inspection and queries"
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "description": "Fetch sensor datasheets and documentation"
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "sensor-edge/"],
+      "description": "Read sensor-edge firmware and bridge scripts"
+    }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[GDF-AutoMon] File saved: $CLAUDE_FILE_PATHS'"
+          }
+        ]
+      }
+    ]
+  }
+}
