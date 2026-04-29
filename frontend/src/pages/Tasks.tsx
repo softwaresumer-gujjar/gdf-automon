@@ -1,9 +1,12 @@
-﻿import { useState } from "react";
+﻿import { useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, CheckCircle, Clock, XCircle, AlertCircle, ClipboardList, ChevronRight } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Plus, CheckCircle, Clock, XCircle, AlertCircle, ClipboardList, ChevronRight,
+  Paperclip, X, FileText, Image, Video, File,
+} from "lucide-react";
 import { formatDistanceToNow, format, isPast, isWithinInterval, addHours } from "date-fns";
-import { apiFetch } from "@/api/client";
+import { apiFetch, API_BASE } from "@/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { Task } from "@/types/plan";
@@ -21,12 +24,25 @@ function DeadlineBadge({ deadline }: { deadline: string | null }) {
   const d = new Date(deadline);
   const past = isPast(d);
   const soon = !past && isWithinInterval(new Date(), { start: new Date(), end: addHours(d, 24) });
-
   return (
     <span className={`text-xs ${past ? "text-red-400" : soon ? "text-yellow-400" : "text-c-text-2"}`}>
       {past ? `Overdue · ${format(d, "MMM d")}` : `Due ${formatDistanceToNow(d, { addSuffix: true })}`}
     </span>
   );
+}
+
+function fileIcon(file: File) {
+  if (file.type.startsWith("image/")) return <Image size={14} className="text-blue-400" />;
+  if (file.type.startsWith("video/")) return <Video size={14} className="text-purple-400" />;
+  if (file.type.includes("pdf") || file.type.includes("document") || file.type.includes("text"))
+    return <FileText size={14} className="text-yellow-400" />;
+  return <File size={14} className="text-c-text-2" />;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 interface CreateBody {
@@ -36,29 +52,54 @@ interface CreateBody {
   assignee_ids: string[];
 }
 
-function CreateTaskModal({
-  users,
-  onClose,
-}: {
-  users: UserResponse[];
-  onClose: () => void;
-}) {
+function CreateTaskModal({ users, onClose }: { users: UserResponse[]; onClose: () => void }) {
   const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<CreateBody>({ title: "", description: "", deadline: "", assignee_ids: [] });
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
-  const create = useMutation({
-    mutationFn: (data: CreateBody) =>
-      apiFetch("/api/tasks", {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setUploading(true);
+    try {
+      const task = await apiFetch<{ id: string }>("/api/tasks", {
         method: "POST",
         body: JSON.stringify({
-          ...data,
-          deadline: data.deadline ? new Date(data.deadline).toISOString() : null,
+          ...form,
+          deadline: form.deadline ? new Date(form.deadline).toISOString() : null,
         }),
-      }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tasks"] }); onClose(); },
-    onError: (e: Error) => setError(e.message),
-  });
+      });
+      // Upload attachments sequentially
+      const token = localStorage.getItem("gdf_token");
+      for (const file of attachments) {
+        const fd = new FormData();
+        fd.append("file", file);
+        await fetch(`${API_BASE}/api/tasks/${task.id}/attachments`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: fd,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create task");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function addFiles(files: FileList | null) {
+    if (!files) return;
+    setAttachments((prev) => [...prev, ...Array.from(files)]);
+  }
+
+  function removeFile(idx: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   function toggleUser(uid: string) {
     setForm((f) => ({
@@ -71,12 +112,12 @@ function CreateTaskModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 px-4 pb-4 md:pb-0">
-      <div className="bg-c-surface border border-c-border rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+      <div className="bg-c-surface border border-c-border rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-c-surface border-b border-c-border px-5 py-4 flex items-center justify-between">
           <h2 className="text-base font-bold text-c-text">New Task</h2>
           <button type="button" onClick={onClose} className="text-c-text-2 hover:text-c-text text-xl leading-none">&times;</button>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); create.mutate(form); }} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <input required placeholder="Title *" value={form.title}
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             className="input-field w-full" />
@@ -86,12 +127,15 @@ function CreateTaskModal({
           <div>
             <label className="text-xs text-c-text-2 mb-1 block">Deadline</label>
             <input type="datetime-local" value={form.deadline}
+              aria-label="Deadline"
               onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
               className="input-field w-full" />
           </div>
+
+          {/* Assignees */}
           <div>
             <p className="text-xs text-c-text-2 mb-2">Assign to users</p>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+            <div className="space-y-1.5 max-h-36 overflow-y-auto border border-c-border rounded-lg p-1">
               {users.filter((u) => u.is_active).map((u) => (
                 <label key={u.id} className="flex items-center gap-2 cursor-pointer hover:bg-c-surface-2 rounded-lg px-2 py-1.5">
                   <input type="checkbox" checked={form.assignee_ids.includes(u.id)}
@@ -102,10 +146,64 @@ function CreateTaskModal({
               ))}
             </div>
           </div>
+
+          {/* Media attachments */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-c-text-2">Attachments</p>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+              >
+                <Paperclip size={12} /> Add files
+              </button>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              className="hidden"
+              aria-label="Add attachments"
+              accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
+            />
+            {attachments.length > 0 ? (
+              <ul className="space-y-1.5 max-h-32 overflow-y-auto">
+                {attachments.map((file, idx) => (
+                  <li key={idx} className="flex items-center gap-2 bg-c-surface-2 border border-c-border rounded-lg px-3 py-1.5">
+                    {fileIcon(file)}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-c-text truncate">{file.name}</p>
+                      <p className="text-xs text-c-text-3">{formatBytes(file.size)}</p>
+                    </div>
+                    <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeFile(idx)}
+                      className="p-0.5 text-c-text-3 hover:text-red-400 transition-colors">
+                      <X size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div
+                className="border-2 border-dashed border-c-border rounded-lg p-4 text-center cursor-pointer hover:border-emerald-500/50 transition-colors"
+                onClick={() => fileRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
+              >
+                <Paperclip size={20} className="mx-auto mb-1 text-c-text-3 opacity-50" />
+                <p className="text-xs text-c-text-3">Drop files or click to attach</p>
+                <p className="text-xs text-c-text-3 opacity-60 mt-0.5">Images, Videos, PDFs, Documents</p>
+              </div>
+            )}
+          </div>
+
           {error && <p className="text-red-400 text-xs">{error}</p>}
           <div className="flex gap-2">
-            <button type="submit" disabled={create.isPending} className="btn-primary flex-1">
-              {create.isPending ? "Creating…" : "Create task"}
+            <button type="submit" disabled={uploading} className="btn-primary flex-1">
+              {uploading
+                ? attachments.length > 0 ? "Uploading…" : "Creating…"
+                : `Create task${attachments.length > 0 ? ` (+${attachments.length} file${attachments.length !== 1 ? "s" : ""})` : ""}`}
             </button>
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
           </div>
@@ -142,7 +240,7 @@ export function Tasks() {
   };
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-3xl mx-auto">
+    <div className="p-4 md:p-6 pb-24 md:pb-6">
       {showCreate && isAdmin && (
         <CreateTaskModal users={users} onClose={() => setShowCreate(false)} />
       )}

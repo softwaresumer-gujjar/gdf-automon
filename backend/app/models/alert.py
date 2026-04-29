@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import String, Float, Boolean, DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -36,6 +36,19 @@ class ActiveAlert(Base):
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AlertRuleAction(Base):
+    __tablename__ = "alert_rule_actions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("alert_rules.id", ondelete="CASCADE"), nullable=False
+    )
+    action_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class PushSubscription(Base):

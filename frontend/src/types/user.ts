@@ -9,6 +9,10 @@ export interface CurrentUser {
 
 export interface UserResponse extends CurrentUser {
   is_active: boolean;
+  phone?: string | null;
+  current_location?: string | null;
+  working_hours?: string | null;
+  duty?: string | null;
 }
 
 export interface TokenResponse {

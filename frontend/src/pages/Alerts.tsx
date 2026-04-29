@@ -1,43 +1,44 @@
 import { useState } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle, Bell, BellOff, CheckCircle, Clock,
   Filter, RefreshCw, Shield, ToggleLeft, ToggleRight,
+  Plus, Trash2, Mail, MessageCircle, Phone, Zap, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import { apiFetch } from "@/api/client";
 import { useActiveAlerts, useAlertRules } from "@/hooks/useAppData";
 import { useAlertStore } from "@/store/alertStore";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { ActiveAlert, AlertRule } from "@/types/alert";
+import type { ActiveAlert, AlertRule, AlertRuleAction, AlertActionType } from "@/types/alert";
 import { clsx } from "clsx";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
 const SEV_CFG = {
   critical: {
-    label:     "Critical",
-    bg:        "bg-red-500/10",
-    border:    "border-red-500/30",
-    text:      "text-red-500",
-    dot:       "bg-red-500",
-    badgeBg:   "bg-red-100 dark:bg-red-500/20",
+    label:   "Critical",
+    bg:      "bg-red-500/10",
+    border:  "border-red-500/30",
+    text:    "text-red-500",
+    dot:     "bg-red-500",
+    badgeBg: "bg-red-100 dark:bg-red-500/20",
   },
   warning: {
-    label:     "Warning",
-    bg:        "bg-yellow-500/10",
-    border:    "border-yellow-500/30",
-    text:      "text-yellow-500",
-    dot:       "bg-yellow-500",
-    badgeBg:   "bg-yellow-100 dark:bg-yellow-500/20",
+    label:   "Warning",
+    bg:      "bg-yellow-500/10",
+    border:  "border-yellow-500/30",
+    text:    "text-yellow-500",
+    dot:     "bg-yellow-500",
+    badgeBg: "bg-yellow-100 dark:bg-yellow-500/20",
   },
   info: {
-    label:     "Info",
-    bg:        "bg-blue-500/10",
-    border:    "border-blue-500/30",
-    text:      "text-blue-500",
-    dot:       "bg-blue-500",
-    badgeBg:   "bg-blue-100 dark:bg-blue-500/20",
+    label:   "Info",
+    bg:      "bg-blue-500/10",
+    border:  "border-blue-500/30",
+    text:    "text-blue-500",
+    dot:     "bg-blue-500",
+    badgeBg: "bg-blue-100 dark:bg-blue-500/20",
   },
 } as const;
 
@@ -46,6 +47,15 @@ const CONDITION_LABELS: Record<string, string> = {
   lt:            "< (less than)",
   eq:            "= (equals)",
   outside_range: "Outside range",
+};
+
+const ACTION_CONFIGS: Record<AlertActionType, { label: string; icon: React.ElementType; color: string; fields: { key: string; label: string; placeholder: string }[] }> = {
+  email:        { label: "Email",        icon: Mail,           color: "text-blue-400",   fields: [{ key: "to", label: "Email address", placeholder: "user@example.com" }] },
+  sms:          { label: "SMS",          icon: MessageCircle,  color: "text-green-400",  fields: [{ key: "phone", label: "Phone number", placeholder: "+92300..." }] },
+  whatsapp:     { label: "WhatsApp",     icon: MessageCircle,  color: "text-emerald-400",fields: [{ key: "phone", label: "WhatsApp number", placeholder: "+92300..." }] },
+  call:         { label: "Voice Call",   icon: Phone,          color: "text-orange-400", fields: [{ key: "phone", label: "Phone number", placeholder: "+92300..." }] },
+  notification: { label: "In-App Notif",icon: Bell,           color: "text-yellow-400", fields: [] },
+  reminder:     { label: "Reminder",    icon: Clock,           color: "text-purple-400", fields: [{ key: "message", label: "Custom message", placeholder: "Check sensor…" }] },
 };
 
 function SeverityBadge({ severity }: { severity: keyof typeof SEV_CFG }) {
@@ -86,11 +96,93 @@ function ActiveAlertCard({ alert }: { alert: ActiveAlert }) {
   );
 }
 
+// ── Rule Action Form ───────────────────────────────────────────────────────
+
+function AddActionForm({
+  ruleId,
+  onDone,
+}: {
+  ruleId: string;
+  onDone: () => void;
+}) {
+  const qc = useQueryClient();
+  const [actionType, setActionType] = useState<AlertActionType>("notification");
+  const [config, setConfig] = useState<Record<string, string>>({});
+
+  const save = useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/alerts/rules/${ruleId}/actions`, {
+        method: "POST",
+        body: JSON.stringify({ action_type: actionType, config, enabled: true }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["alert-rule-actions", ruleId] });
+      onDone();
+    },
+  });
+
+  const actionDef = ACTION_CONFIGS[actionType];
+
+  return (
+    <div className="bg-c-surface border border-slate-600 rounded-lg p-3 space-y-2 mt-2">
+      <p className="text-xs font-semibold text-c-text-2 uppercase tracking-wide">Add Action</p>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs text-c-text-3 mb-0.5">Action type</label>
+          <select
+            aria-label="Action type"
+            value={actionType}
+            onChange={(e) => { setActionType(e.target.value as AlertActionType); setConfig({}); }}
+            className="input-field text-xs w-full"
+          >
+            {(Object.keys(ACTION_CONFIGS) as AlertActionType[]).map((t) => (
+              <option key={t} value={t}>{ACTION_CONFIGS[t].label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {actionDef.fields.map((f) => (
+        <div key={f.key}>
+          <label className="block text-xs text-c-text-3 mb-0.5">{f.label}</label>
+          <input
+            type="text"
+            placeholder={f.placeholder}
+            value={config[f.key] ?? ""}
+            onChange={(e) => setConfig((c) => ({ ...c, [f.key]: e.target.value }))}
+            className="input-field text-xs w-full"
+          />
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => save.mutate()}
+          disabled={save.isPending}
+          className="btn-primary flex-1 text-xs py-1.5 disabled:opacity-50"
+        >
+          {save.isPending ? "Saving…" : "Add"}
+        </button>
+        <button type="button" onClick={onDone} className="btn-secondary flex-1 text-xs py-1.5">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Alert Rule Row ─────────────────────────────────────────────────────────
 
 function AlertRuleRow({ rule, canEdit }: { rule: AlertRule; canEdit: boolean }) {
   const qc = useQueryClient();
   const c = SEV_CFG[rule.severity];
+  const [expanded, setExpanded] = useState(false);
+  const [showAddAction, setShowAddAction] = useState(false);
+
+  const { data: actions = [] } = useQuery<AlertRuleAction[]>({
+    queryKey: ["alert-rule-actions", rule.id],
+    queryFn: () => apiFetch(`/api/alerts/rules/${rule.id}/actions`),
+    enabled: expanded,
+  });
 
   const toggle = useMutation({
     mutationFn: () =>
@@ -101,40 +193,116 @@ function AlertRuleRow({ rule, canEdit }: { rule: AlertRule; canEdit: boolean }) 
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts-rules"] }),
   });
 
+  const deleteAction = useMutation({
+    mutationFn: (actionId: string) =>
+      apiFetch(`/api/alerts/rules/${rule.id}/actions/${actionId}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alert-rule-actions", rule.id] }),
+  });
+
   const conditionStr = rule.condition === "outside_range"
     ? `Outside [${rule.threshold} – ${rule.threshold_max}]`
     : `${CONDITION_LABELS[rule.condition] ?? rule.condition} ${rule.threshold}`;
 
   return (
-    <div className={clsx("card p-3 flex items-center gap-3 transition-opacity", !rule.enabled && "opacity-50")}>
-      <span className={clsx("w-2 h-2 rounded-full shrink-0", c.dot)} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-c-text font-medium truncate">
-          {rule.channel} · {conditionStr}
-        </p>
-        <p className="text-xs text-c-text-3 mt-0.5">
-          Sensor {rule.sensor_id.slice(0, 8)}…
-        </p>
-      </div>
-      <SeverityBadge severity={rule.severity} />
-      {canEdit && (
+    <div className={clsx("card overflow-hidden transition-opacity", !rule.enabled && "opacity-50")}>
+      <div className="p-3 flex items-center gap-3">
+        <span className={clsx("w-2 h-2 rounded-full shrink-0", c.dot)} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-c-text font-medium truncate">
+            {rule.channel} · {conditionStr}
+          </p>
+          <p className="text-xs text-c-text-3 mt-0.5">
+            Sensor {rule.sensor_id.slice(0, 8)}…
+            {actions.length > 0 && ` · ${actions.length} action${actions.length !== 1 ? "s" : ""}`}
+          </p>
+        </div>
+        <SeverityBadge severity={rule.severity} />
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => toggle.mutate()}
+            disabled={toggle.isPending}
+            className="text-c-text-3 hover:text-c-text transition-colors ml-1"
+            title={rule.enabled ? "Disable rule" : "Enable rule"}
+          >
+            {rule.enabled
+              ? <ToggleRight size={20} className="text-emerald-500" />
+              : <ToggleLeft size={20} />}
+          </button>
+        )}
         <button
           type="button"
-          onClick={() => toggle.mutate()}
-          disabled={toggle.isPending}
-          className="text-c-text-3 hover:text-c-text transition-colors ml-1"
-          title={rule.enabled ? "Disable rule" : "Enable rule"}
+          onClick={() => setExpanded((v) => !v)}
+          className="p-1 text-c-text-3 hover:text-c-text transition-colors"
+          title="Configure actions"
         >
-          {rule.enabled
-            ? <ToggleRight size={20} className="text-emerald-500" />
-            : <ToggleLeft size={20} />}
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-c-border bg-c-surface-2/40 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-c-text-2 uppercase tracking-wide">Actions</p>
+            {canEdit && !showAddAction && (
+              <button
+                type="button"
+                onClick={() => setShowAddAction(true)}
+                className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
+              >
+                <Plus size={12} /> Add action
+              </button>
+            )}
+          </div>
+
+          {showAddAction && (
+            <AddActionForm
+              ruleId={rule.id}
+              onDone={() => setShowAddAction(false)}
+            />
+          )}
+
+          {actions.length === 0 && !showAddAction && (
+            <p className="text-xs text-c-text-3">No actions configured. Add an action to receive alerts via Email, SMS, WhatsApp, Call or Notification.</p>
+          )}
+
+          {actions.map((a) => {
+            const def = ACTION_CONFIGS[a.action_type];
+            const Icon = def?.icon ?? Zap;
+            return (
+              <div key={a.id} className="flex items-center gap-2 bg-c-surface rounded-lg px-3 py-2">
+                <Icon size={14} className={def?.color ?? "text-c-text-2"} />
+                <div className="flex-1 min-w-0">
+                  <span className={clsx("text-xs font-medium", def?.color ?? "text-c-text-2")}>
+                    {def?.label ?? a.action_type}
+                  </span>
+                  {Object.entries(a.config).map(([k, v]) => (
+                    <span key={k} className="text-c-text-3 text-xs ml-2">
+                      {v}
+                    </span>
+                  ))}
+                  {!a.enabled && <span className="text-xs text-c-text-3 ml-1">(disabled)</span>}
+                </div>
+                {canEdit && (
+                  <button
+                    type="button"
+                    aria-label={`Delete ${def?.label ?? a.action_type} action`}
+                    onClick={() => deleteAction.mutate(a.id)}
+                    className="p-1 text-c-text-3 hover:text-red-400 transition-colors shrink-0"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 type Severity = "all" | "critical" | "warning" | "info";
 
@@ -146,7 +314,6 @@ export function Alerts() {
   const { isAdmin } = usePermissions();
   const markRead = useAlertStore((s) => s.markRead);
 
-  // Mark all as read when this page mounts
   useState(() => { markRead(); });
 
   const filteredAlerts = severityFilter === "all"
@@ -170,11 +337,7 @@ export function Alerts() {
             {activeAlerts.length} active · {rules.length} rules configured
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => refetchAlerts()}
-          className="btn-secondary flex items-center gap-2"
-        >
+        <button type="button" onClick={() => refetchAlerts()} className="btn-secondary flex items-center gap-2">
           <RefreshCw size={14} />
           Refresh
         </button>
@@ -202,9 +365,7 @@ export function Alerts() {
           >
             <div className="flex items-center gap-2 mb-1">
               <Icon size={14} className={SEV_CFG[sev].text} />
-              <span className={clsx("text-xs font-medium", SEV_CFG[sev].text)}>
-                {SEV_CFG[sev].label}
-              </span>
+              <span className={clsx("text-xs font-medium", SEV_CFG[sev].text)}>{SEV_CFG[sev].label}</span>
             </div>
             <p className={clsx("text-2xl font-bold tabular-nums", SEV_CFG[sev].text)}>{count}</p>
           </button>
@@ -242,7 +403,6 @@ export function Alerts() {
       {/* Active Alerts tab */}
       {activeTab === "active" && (
         <div className="space-y-3">
-          {/* Filter bar */}
           {activeAlerts.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               <Filter size={14} className="text-c-text-3" />
@@ -277,21 +437,12 @@ export function Alerts() {
               </p>
             </div>
           ) : (
-            <>
-              {criticalCount > 0 && severityFilter === "all" && (
-                <p className="text-xs font-semibold text-c-text-2 uppercase tracking-wide">
-                  Critical ({criticalCount})
-                </p>
-              )}
-              {filteredAlerts
-                .sort((a, b) => {
-                  const order = { critical: 0, warning: 1, info: 2 };
-                  return order[a.severity] - order[b.severity];
-                })
-                .map((alert) => (
-                  <ActiveAlertCard key={alert.id} alert={alert} />
-                ))}
-            </>
+            filteredAlerts
+              .sort((a, b) => {
+                const order = { critical: 0, warning: 1, info: 2 };
+                return order[a.severity] - order[b.severity];
+              })
+              .map((alert) => <ActiveAlertCard key={alert.id} alert={alert} />)
           )}
         </div>
       )}
@@ -311,14 +462,17 @@ export function Alerts() {
             </div>
           ) : (
             <>
-              <p className="text-xs text-c-text-3 mb-2">{rules.length} rules · {rules.filter(r => r.enabled).length} enabled</p>
-              {["critical", "warning", "info"].map((sev) => {
+              <p className="text-xs text-c-text-3 mb-2">
+                {rules.length} rules · {rules.filter((r) => r.enabled).length} enabled ·
+                Click <ChevronRight size={10} className="inline" /> to configure actions
+              </p>
+              {(["critical", "warning", "info"] as const).map((sev) => {
                 const group = rules.filter((r) => r.severity === sev);
                 if (group.length === 0) return null;
                 return (
                   <div key={sev}>
                     <p className="text-xs font-semibold text-c-text-2 uppercase tracking-wide mt-4 mb-2">
-                      {SEV_CFG[sev as keyof typeof SEV_CFG].label} ({group.length})
+                      {SEV_CFG[sev].label} ({group.length})
                     </p>
                     {group.map((rule) => (
                       <div key={rule.id} className="mb-2">

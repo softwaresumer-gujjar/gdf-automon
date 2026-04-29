@@ -20,6 +20,7 @@ import { Tasks } from "@/pages/Tasks";
 import { TaskDetail } from "@/pages/TaskDetail";
 import { Chat } from "@/pages/Chat";
 import { Alerts } from "@/pages/Alerts";
+import { Monitoring } from "@/pages/Monitoring";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 2 } },
@@ -32,6 +33,7 @@ function AppShell() {
       <main className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0 overflow-hidden">
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/sensors" element={<SensorManagement />} />
           <Route path="/sensors/:id" element={<SensorDetail />} />
           <Route path="/alerts" element={<Alerts />} />

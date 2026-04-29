@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Settings2, Bell, Activity, MapPin, Users,
-  LogOut, Target, ClipboardList, MessageSquare, Sun, Moon,
+  LogOut, Target, ClipboardList, MessageSquare, Sun, Moon, Monitor,
 } from "lucide-react";
 import { useAlertStore } from "@/store/alertStore";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,8 +22,9 @@ export function Sidebar() {
   }
 
   const nav = [
-    { to: "/",          icon: LayoutDashboard, label: "Dashboard", show: true },
-    { to: "/sensors",   icon: Settings2,       label: "Sensors",   show: true },
+    { to: "/",          icon: LayoutDashboard, label: "Dashboard",  show: true },
+    { to: "/monitoring",icon: Monitor,         label: "Monitoring", show: true },
+    { to: "/sensors",   icon: Settings2,       label: "Sensors",    show: true },
     { to: "/tasks",     icon: ClipboardList,   label: "Tasks",     show: true },
     { to: "/alerts",    icon: Bell,            label: "Alerts",    show: true, badge: unread },
     { to: "/chat",      icon: MessageSquare,   label: "Chat",      show: true },

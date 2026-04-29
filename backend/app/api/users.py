@@ -17,12 +17,20 @@ class UserCreate(BaseModel):
     full_name: str
     password: str
     role: str = "operator"
+    phone: str | None = None
+    current_location: str | None = None
+    working_hours: str | None = None
+    duty: str | None = None
 
 
 class UserUpdate(BaseModel):
     full_name: str | None = None
     role: str | None = None
     is_active: bool | None = None
+    phone: str | None = None
+    current_location: str | None = None
+    working_hours: str | None = None
+    duty: str | None = None
 
 
 class UserResponse(BaseModel):
@@ -31,6 +39,10 @@ class UserResponse(BaseModel):
     full_name: str
     role: str
     is_active: bool
+    phone: str | None = None
+    current_location: str | None = None
+    working_hours: str | None = None
+    duty: str | None = None
 
     class Config:
         from_attributes = True
@@ -73,6 +85,10 @@ async def create_user(
         full_name=body.full_name,
         password_hash=hash_password(body.password),
         role=body.role,
+        phone=body.phone,
+        current_location=body.current_location,
+        working_hours=body.working_hours,
+        duty=body.duty,
     )
     db.add(user)
     await db.commit()

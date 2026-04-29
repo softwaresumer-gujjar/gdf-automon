@@ -294,7 +294,7 @@ export function Planning() {
   });
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-3xl mx-auto">
+    <div className="p-4 md:p-6 pb-24 md:pb-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-c-text">Planning</h1>

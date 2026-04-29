@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Settings2, Bell, ClipboardList, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Monitor, Bell, ClipboardList, MessageSquare } from "lucide-react";
 import { useAlertStore } from "@/store/alertStore";
 import { clsx } from "clsx";
 
@@ -7,11 +7,11 @@ export function MobileNav() {
   const unread = useAlertStore((s) => s.unreadCount);
 
   const nav = [
-    { to: "/",        icon: LayoutDashboard, label: "Home",    badge: 0 },
-    { to: "/tasks",   icon: ClipboardList,   label: "Tasks",   badge: 0 },
-    { to: "/chat",    icon: MessageSquare,   label: "Chat",    badge: 0 },
-    { to: "/alerts",  icon: Bell,            label: "Alerts",  badge: unread },
-    { to: "/sensors", icon: Settings2,       label: "Sensors", badge: 0 },
+    { to: "/",           icon: LayoutDashboard, label: "Home",    badge: 0 },
+    { to: "/monitoring", icon: Monitor,         label: "Monitor", badge: 0 },
+    { to: "/tasks",      icon: ClipboardList,   label: "Tasks",   badge: 0 },
+    { to: "/chat",       icon: MessageSquare,   label: "Chat",    badge: 0 },
+    { to: "/alerts",     icon: Bell,            label: "Alerts",  badge: unread },
   ];
 
   return (
