@@ -837,4 +837,35 @@ docker logs -f gdf-backend           # watch MQTT ingestion logs
 
 ---
 
+## 12. Companion Diagrams Reference (DIAGRAMS.md)
+
+[DIAGRAMS.md](DIAGRAMS.md) contains 15 focused diagrams that zoom into each layer and runtime scenario. Use it alongside this document for deeper detail.
+
+### Layer Diagrams — what exists at rest
+
+| ID | Layer | What it shows |
+|---|---|---|
+| L1 | Physical Sensor Layer | SHT31 I2C wiring (SDA=21, SCL=22), HX711 pseudo-SPI (DOUT=4, SCK=5), load cell bridge, Lactoscan RS-232 DB-9, ADC probes, solar power chain |
+| L2 | Edge Firmware Layer | ESP32 deep-sleep loop (wake → WiFi → MQTT → read → publish → sleep 25s), RPi Lactoscan CSV parser, RPi ffmpeg RTSP→HLS bridge with watchdog |
+| L3 | Wireless Network Layer | UniFi AP placement per zone, PoE switch backbone, DHCP reservations, IoT VLAN, 4G/LTE fallback via SIM800L |
+| L4 | MQTT Broker Layer | EMQX topic trie routing, QoS 1 PUBACK flow, retained messages, session store for offline clients, subscriber fan-out to FastAPI |
+| L5 | Application Server Layer | FastAPI routers + middleware + background services, TimescaleDB hypertable inserts and chunk pruning, Redis Pub/Sub channels, Socket.io rooms |
+| L6 | Host & Infrastructure Layer | Docker container graph with ports and volumes, UFW firewall rules, Nginx TLS termination and proxy config, cloud VPS placement |
+| L7 | Client Delivery Layer | AuthContext JWT flow, TanStack Query cache strategy, Zustand live-reading store, Socket.io room subscriptions, Workbox Service Worker, PWA manifest install prompt |
+
+### Data Flow Diagrams — what moves at runtime
+
+| ID | Scenario | Key path |
+|---|---|---|
+| F1 | Sensor reading → live dashboard | ESP32 → EMQX → FastAPI Bridge → TimescaleDB + Redis → Socket.io → Zustand → React card re-render (~80–250 ms LAN) |
+| F2 | Alert threshold breach → push notification | Alert engine evaluates rule → INSERT active_alert → pywebpush VAPID POST → browser Service Worker `onpush` → `showNotification()` |
+| F3 | Alert breach → Twilio SMS & voice call | Alert engine → `twilio_service.send_sms()` → Twilio REST API → carrier → user SMS inbox; then `make_call()` → TwiML voice reads alert aloud |
+| F4 | User opens historical chart | `useQuery` cache miss → `apiFetch` with JWT → FastAPI → TimescaleDB chunk-pruned SELECT → Recharts LineChart renders ~8 640 points |
+| F5 | Task deadline reminder | APScheduler fires every 30 min → SELECT tasks due within 24h → INSERT notifications → pywebpush push → `showNotification()` on assignee's device |
+| F6 | PWA install & offline load | Service Worker `install` precaches shell → `beforeinstallprompt` → Add to Home Screen → offline: `NetworkFirst` falls back to Workbox cache → reconnect resumes live data |
+| F7 | Admin registers new sensor | UI fetches plugin types → admin fills config form → POST `/api/sensors` → plugin registry validates schema → INSERT sensors → firmware flashed with `sensor_id` → first MQTT publish appears on Monitoring page |
+| F8 | Full alert lifecycle | Anomalous reading → rule triggered → push + SMS + voice call fired → physical fix applied → temperature normalises → auto-resolve UPDATE → Socket.io broadcasts resolved → full audit trail in TimescaleDB |
+
+---
+
 *Architecture version: April 2026 · GDF-AutoMon v1.x*
